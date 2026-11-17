@@ -33,7 +33,7 @@ public static class ReservationMapper
         {
             Id = reservation.Id,
             ResourceName = resource?.Name,
-            ResourceType = resource?.Type,
+            ResourceType = resource.Type,
             Start = reservation.Start,
             End = reservation.End,
             Status = reservation.Status,

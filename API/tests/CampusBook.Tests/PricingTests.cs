@@ -8,12 +8,12 @@ public class PricingTests
 {
     private static User Student()
     {
-        return new User { Id = 1, Name = "Test Student", Email = "test@student.campusbook.local", Role = "student" };
+        return new User { Id = 1, Name = "Test Student", Email = "test@student.campusbook.local", UserRole = UserRole.Student};
     }
 
     private static Resource Laptop()
     {
-        return new Resource { Id = 3, Name = "Laptop L-01", Type = "laptop", HourlyRate = 4m, DayRate = 25m };
+        return new Resource { Id = 3, Name = "Laptop L-01", Type = ResourceTypes.Laptop, HourlyRate = 4m, DayRate = 25m };
     }
 
     [Fact]

@@ -27,7 +27,7 @@ public class StatsService(IReservationRepository repo)
         {
             byStatus = repo.CountByStatus(),
             reservationsThisMonth = thisMonth.Count,
-            revenueThisMonth = thisMonth.Where(r => r.Status != "Cancelled").Sum(r => r.Price),
+            revenueThisMonth = thisMonth.Where(r => r.Status != ReservationStatus.Cancelled).Sum(r => r.Price),
             confirmationsSinceStartup = confirmations,
             confirmedAmountSinceStartup = confirmedTotal
         };
