@@ -8,6 +8,12 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<CampusDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Campus") ?? "Data Source=campusbook.db"));
 
+builder.Services.AddSingleton<PriceCalculator>();
+builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
+builder.Services.AddScoped<ReservationService>();
+builder.Services.AddScoped<StatsService>();
+builder.Services.AddScoped<ExportService>();
+
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.AddScoped<IReservationRepository, ReservationRepository>();

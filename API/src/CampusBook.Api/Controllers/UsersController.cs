@@ -5,7 +5,7 @@ namespace CampusBook.Api.Controllers;
 
 [ApiController]
 [Route("api")]
-public class UsersController : ControllerBase
+public class UsersController(StatsService stats, CampusDbContext db) : ControllerBase
 {
     private readonly UserService _userService;
     private readonly StatsService _statsService;
