@@ -6,25 +6,17 @@ namespace CampusBook.Api.Controllers;
 
 [ApiController]
 [Route("api")]
-public class UsersController : ControllerBase
+public class UsersController(StatsService stats, CampusDbContext db) : ControllerBase
 {
-    private readonly CampusDbContext _db;
-
-    public UsersController(CampusDbContext db)
-    {
-        _db = db;
-    }
-
     [HttpGet("users")]
     public IActionResult GetUsers()
     {
-        return Ok(_db.Users.OrderBy(u => u.Name).ToList());
+        return Ok(db.Users.OrderBy(u => u.Name).ToList());
     }
 
     [HttpGet("stats")]
     public IActionResult Stats()
     {
-        var stats = new StatsService(new ReservationRepository(_db));
         return Ok(stats.GetDashboard());
     }
 }

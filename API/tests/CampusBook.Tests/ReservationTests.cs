@@ -46,7 +46,7 @@ public class ReservationTests
         db.Reservations.Add(reservation);
         db.SaveChanges();
 
-        var service = new ReservationService(new ReservationRepository(db), db);
+        var service = new ReservationService(db, new ReservationRepository(db), new PriceCalculator());
         service.Cancel(reservation.Id);
 
         Assert.Equal("Cancelled", db.Reservations.Find(reservation.Id).Status);

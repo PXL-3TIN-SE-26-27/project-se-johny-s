@@ -9,27 +9,18 @@ namespace CampusBook.Api.Controllers;
 
 [ApiController]
 [Route("api/reservations")]
-public class ReservationsController : ControllerBase
+public class ReservationsController(ReservationService service, ExportService export, CampusDbContext db) : ControllerBase
 {
-    private readonly CampusDbContext _db;
-
-    public ReservationsController(CampusDbContext db)
-    {
-        _db = db;
-    }
-
     [HttpGet]
     public IActionResult GetForUser([FromQuery] int userId)
     {
         if (userId <= 0) return BadRequest("userId is required");
-        var service = new ReservationService(new ReservationRepository(_db), _db);
         return Ok(service.GetForUser(userId));
     }
 
     [HttpGet("overdue")]
     public IActionResult Overdue()
     {
-        var service = new ReservationService(new ReservationRepository(_db), _db);
         return Ok(service.GetOverdue());
     }
 
@@ -43,7 +34,6 @@ public class ReservationsController : ControllerBase
 
         try
         {
-            var service = new ReservationService(new ReservationRepository(_db), _db);
             var dto = service.Create(request);
             return Ok(dto);
         }
@@ -66,11 +56,10 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var service = new ReservationService(new ReservationRepository(_db), _db);
             var r = service.Confirm(id);
 
-            var user = _db.Users.Find(r.UserId);
-            var resource = _db.Resources.Find(r.ResourceId);
+            var user = db.Users.Find(r.UserId);
+            var resource = db.Resources.Find(r.ResourceId);
 
             var mailer = new SmtpMailer("smtp.campus.local");
             mailer.Send(user.Email, "CampusBook: reservation confirmed",
@@ -104,7 +93,6 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var service = new ReservationService(new ReservationRepository(_db), _db);
             var r = service.CheckOut(id);
             return Ok(new { r.Id, r.Status });
         }
@@ -123,7 +111,6 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var service = new ReservationService(new ReservationRepository(_db), _db);
             var r = service.Return(id);
             return Ok(new { r.Id, r.Status, r.Price });
         }
@@ -142,7 +129,6 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var service = new ReservationService(new ReservationRepository(_db), _db);
             var r = service.Cancel(id);
             return Ok(new { r.Id, r.Status });
         }
@@ -161,7 +147,6 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var service = new ReservationService(new ReservationRepository(_db), _db);
             var r = service.Pay(id);
             return Ok(new { r.Id, r.Status, r.Paid, r.PaymentRef });
         }
@@ -182,7 +167,6 @@ public class ReservationsController : ControllerBase
     [HttpPost("reminders")]
     public IActionResult Reminders()
     {
-        var service = new ReservationService(new ReservationRepository(_db), _db);
         var count = service.SendReminders();
         return Ok(new { sent = count });
     }
@@ -191,7 +175,6 @@ public class ReservationsController : ControllerBase
     public IActionResult Export([FromQuery] int userId)
     {
         if (userId <= 0) return BadRequest("userId is required");
-        var export = new ExportService(new ReservationRepository(_db));
         var csv = export.ToCsv(userId);
         return File(Encoding.UTF8.GetBytes(csv), "text/csv", "reservations.csv");
     }
