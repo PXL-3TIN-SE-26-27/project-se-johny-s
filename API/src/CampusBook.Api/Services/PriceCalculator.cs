@@ -1,3 +1,4 @@
+
 using CampusBook.Api.Infrastructure;
 using CampusBook.Api.Models;
 
@@ -17,63 +18,71 @@ public class PriceCalculator
             throw new ArgumentException("Invalid period");
         }
 
-        if (user.Role == "staff")
+        switch (user.Role)
         {
-            return 0;
-        }
-        else if (user.Role == "student")
-        {
-            switch (resource.Type)
-            {
-                case "laptop":
-                    price = hours * resource.HourlyRate;
-                    if (hours > 24)
-                    {
-                        price = Math.Min(price, days * resource.DayRate);
-                    }
-                    break;
-                case "camera":
-                    price = hours * resource.HourlyRate;
-                    if (hours > 8)
-                    {
-                        price = Math.Min(price, days * resource.DayRate);
-                    }
-                    break;
-                case "printer":
-                    price = hours * resource.HourlyRate + 2.50m;
-                    break;
-                case "room":
-                    price = hours * resource.HourlyRate;
-                    break;
-                default:
-                    throw new InvalidOperationException("Unknown resource type " + resource.Type);
-            }
-        }
-        else if (user.Role == "association")
-        {
-            switch (resource.Type)
-            {
-                case "room":
-                    price = days * resource.DayRate;
-                    if (start.DayOfWeek != DayOfWeek.Saturday && start.DayOfWeek != DayOfWeek.Sunday)
-                    {
-                        price = price * 0.8m;
-                    }
-                    break;
-                case "laptop":
-                case "camera":
-                    price = days * resource.DayRate;
-                    break;
-                case "printer":
-                    price = hours * resource.HourlyRate + 2.50m;
-                    break;
-                default:
-                    throw new InvalidOperationException("Unknown resource type " + resource.Type);
-            }
-        }
-        else
-        {
-            throw new InvalidOperationException("Unknown role " + user.Role);
+            case "staff":
+                return 0;
+
+            case "student":
+                switch (resource.Type)
+                {
+                    case "laptop":
+                        price = hours * resource.HourlyRate;
+                        if (hours > 24)
+                        {
+                            price = Math.Min(price, days * resource.DayRate);
+                        }
+                        break;
+
+                    case "camera":
+                        price = hours * resource.HourlyRate;
+                        if (hours > 8)
+                        {
+                            price = Math.Min(price, days * resource.DayRate);
+                        }
+                        break;
+
+                    case "printer":
+                        price = hours * resource.HourlyRate + 2.50m;
+                        break;
+
+                    case "room":
+                        price = hours * resource.HourlyRate;
+                        break;
+
+                    default:
+                        throw new InvalidOperationException("Unknown resource type " + resource.Type);
+                }
+                break;
+
+            case "association":
+                switch (resource.Type)
+                {
+                    case "room":
+                        price = days * resource.DayRate;
+                        if (start.DayOfWeek != DayOfWeek.Saturday &&
+                            start.DayOfWeek != DayOfWeek.Sunday)
+                        {
+                            price = price * 0.8m;
+                        }
+                        break;
+
+                    case "laptop":
+                    case "camera":
+                        price = days * resource.DayRate;
+                        break;
+
+                    case "printer":
+                        price = hours * resource.HourlyRate + 2.50m;
+                        break;
+
+                    default:
+                        throw new InvalidOperationException("Unknown resource type " + resource.Type);
+                }
+                break;
+
+            default:
+                throw new InvalidOperationException("Unknown role " + user.Role);
         }
 
         if (end.DayOfWeek == DayOfWeek.Saturday || end.DayOfWeek == DayOfWeek.Sunday)
@@ -146,7 +155,8 @@ public class PriceCalculator
             }
         }
 
-        if (AppConfig.Instance.CurrentCampaignDiscount > 0 && DateTime.Now < AppConfig.Instance.CampaignEndsAt)
+        if (AppConfig.Instance.CurrentCampaignDiscount > 0 &&
+            DateTime.Now < AppConfig.Instance.CampaignEndsAt)
         {
             price = price - price * AppConfig.Instance.CurrentCampaignDiscount;
         }
@@ -160,6 +170,7 @@ public class PriceCalculator
         {
             return Math.Round(r.Price * 0.5m, 2);
         }
+
         return 0;
     }
 }
