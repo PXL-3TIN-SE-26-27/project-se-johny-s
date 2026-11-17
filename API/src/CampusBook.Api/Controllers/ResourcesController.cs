@@ -8,25 +8,31 @@ namespace CampusBook.Api.Controllers;
 [Route("api/resources")]
 public class ResourcesController : ControllerBase
 {
-    private readonly CampusDbContext _db;
+    private readonly ReservationService _reservationService;
+    private readonly ResourceService _resourceService;
 
-    public ResourcesController(CampusDbContext db)
+    public ResourcesController(
+        ReservationService reservationService,
+        ResourceService resourceService)
     {
-        _db = db;
+        _reservationService = reservationService;
+        _resourceService = resourceService;
     }
 
     [HttpGet]
     public IActionResult GetAvailability([FromQuery] DateTime? date)
     {
-        var service = new ReservationService(new ReservationRepository(_db), _db);
-        return Ok(service.GetAvailability(date ?? DateTime.Today));
+        return Ok(_reservationService.GetAvailability(date ?? DateTime.Today));
     }
 
     [HttpGet("{id}")]
     public IActionResult Get(int id)
     {
-        var res = _db.Resources.Find(id);
-        if (res == null) return NotFound();
+        var res = _resourceService.GetById(id);
+
+        if (res == null)
+            return NotFound();
+
         return Ok(res);
     }
 }

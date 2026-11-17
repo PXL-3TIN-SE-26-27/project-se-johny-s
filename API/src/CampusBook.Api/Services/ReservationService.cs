@@ -8,13 +8,11 @@ namespace CampusBook.Api.Services;
 public class ReservationService
 {
     private readonly IReservationRepository _repo;
-    private readonly CampusDbContext _db;
     private readonly PriceCalculator _calc = new PriceCalculator();
 
-    public ReservationService(IReservationRepository repo, CampusDbContext db)
+    public ReservationService(IReservationRepository repo)
     {
         _repo = repo;
-        _db = db;
     }
 
     public List<ResourceAvailabilityDto> GetAvailability(DateTime date)
@@ -22,9 +20,9 @@ public class ReservationService
         var dayStart = date.Date;
         var dayEnd = dayStart.AddDays(1);
 
-        var resources = _db.Resources.ToList();
-        var reservations = _db.Reservations
-            .Where(r => r.Start < dayEnd && r.End > dayStart && r.Status != "Cancelled" && r.Status != "Returned")
+        var resources = _repo.GetAllResources();
+        var reservations = _repo.GetByDateRange(dayStart, dayEnd)
+            .Where(r => r.Status != "Cancelled" && r.Status != "Returned")
             .ToList();
 
         var result = new List<ResourceAvailabilityDto>();
