@@ -2,6 +2,8 @@ using System.Globalization;
 using CampusBook.Api.Data;
 using CampusBook.Api.Infrastructure;
 using CampusBook.Api.Models;
+using CampusBook.Api.Models.DTOs;
+using CampusBook.Api.Models.Mappers;
 
 namespace CampusBook.Api.Services;
 
@@ -17,28 +19,13 @@ public class ReservationService(CampusDbContext db, IReservationRepository repo,
             .Where(r => r.Start < dayEnd && r.End > dayStart && r.Status != "Cancelled" && r.Status != "Returned")
             .ToList();
 
-        var result = new List<ResourceAvailabilityDto>();
-        foreach (var res in resources)
-        {
-            var dto = new ResourceAvailabilityDto();
-            dto.Id = res.Id;
-            dto.Name = res.Name;
-            dto.Type = res.Type;
-            dto.Location = res.Location;
-            dto.HourlyRate = res.HourlyRate;
-            dto.DayRate = res.DayRate;
-
-            var busy = reservations.Where(r => r.ResourceId == res.Id).OrderBy(r => r.Start).ToList();
-            foreach (var b in busy)
-            {
-                var from = b.Start < dayStart ? "00:00" : b.Start.ToString("HH:mm");
-                var to = b.End > dayEnd ? "24:00" : b.End.ToString("HH:mm");
-                dto.BusySlots.Add(from + "-" + to);
-            }
-            dto.Available = busy.Count == 0;
-            result.Add(dto);
-        }
-        return result;
+        return resources
+            .Select(resource => ReservationMapper.ToAvailabilityDto(
+                resource,
+                reservations.Where(reservation => reservation.ResourceId == resource.Id),
+                dayStart,
+                dayEnd))
+            .ToList();
     }
 
     public ReservationDto Create(CreateReservationRequest req)
@@ -80,16 +67,8 @@ public class ReservationService(CampusDbContext db, IReservationRepository repo,
             }
         }
 
-        var r = new Reservation();
+        var r = ReservationMapper.ToEntity(req);
         r.UserId = user.Id;
-        r.Start = req.Start;
-        r.End = req.End;
-        r.Insurance = req.Insurance;
-        r.Delivery = req.Delivery;
-        r.Technician = req.Technician;
-        r.Cleaning = req.Cleaning;
-        r.ExtendedReturn = req.ExtendedReturn;
-        r.Notes = req.Notes;
         r.Status = "Pending";
         r.CreatedAt = DateTime.Now;
 
@@ -396,25 +375,6 @@ public class ReservationService(CampusDbContext db, IReservationRepository repo,
 
     private ReservationDto ToDto(Reservation r, Resource resource)
     {
-        var extras = new List<string>();
-        if (r.Insurance) extras.Add("insurance");
-        if (r.Delivery) extras.Add("delivery");
-        if (r.Technician) extras.Add("technician");
-        if (r.Cleaning) extras.Add("cleaning");
-        if (r.ExtendedReturn) extras.Add("extended return");
-
-        return new ReservationDto
-        {
-            Id = r.Id,
-            ResourceName = resource?.Name,
-            ResourceType = resource?.Type,
-            Start = r.Start,
-            End = r.End,
-            Status = r.Status,
-            Price = r.Price,
-            Deposit = r.Deposit,
-            Paid = r.Paid,
-            Extras = string.Join(", ", extras)
-        };
+        return ReservationMapper.ToDto(r, resource);
     }
 }
