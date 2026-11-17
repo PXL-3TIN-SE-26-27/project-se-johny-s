@@ -4,20 +4,13 @@ using CampusBook.Api.Data;
 
 namespace CampusBook.Api.Services;
 
-public class ExportService
+public class ExportService(IReservationRepository repo)
 {
-    private readonly IReservationRepository _repo;
-
-    public ExportService(IReservationRepository repo)
-    {
-        _repo = repo;
-    }
-
     public string ToCsv(int userId)
     {
         var sb = new StringBuilder();
         sb.AppendLine("id;resource;start;end;status;price");
-        foreach (var r in _repo.GetByUser(userId))
+        foreach (var r in repo.GetByUser(userId))
         {
             sb.AppendLine(string.Join(";",
                 r.Id,

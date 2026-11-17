@@ -1,4 +1,5 @@
 using CampusBook.Api.Data;
+using CampusBook.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,6 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddDbContext<CampusDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Campus") ?? "Data Source=campusbook.db"));
+
+builder.Services.AddSingleton<PriceCalculator>();
+builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
+builder.Services.AddScoped<ReservationService>();
+builder.Services.AddScoped<StatsService>();
+builder.Services.AddScoped<ExportService>();
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
