@@ -2,6 +2,7 @@ using System.Text;
 using CampusBook.Api.Data;
 using CampusBook.Api.Infrastructure;
 using CampusBook.Api.Models;
+using CampusBook.Api.Models.DTOs;
 using CampusBook.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
