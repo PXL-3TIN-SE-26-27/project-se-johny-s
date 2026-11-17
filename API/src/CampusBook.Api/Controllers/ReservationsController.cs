@@ -8,7 +8,7 @@ namespace CampusBook.Api.Controllers;
 
 [ApiController]
 [Route("api/reservations")]
-public class ReservationsController(ReservationService service, ExportService export, CampusDbContext db) : ControllerBase
+public class ReservationsController : ControllerBase
 {
     private readonly ReservationService _service;
     private readonly ExportService _exportService;

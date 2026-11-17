@@ -4,7 +4,7 @@ public class ResourceAvailabilityDto
 {
     public int Id { get; set; }
     public string Name { get; set; }
-    public string Type { get; set; }
+    public ResourceTypes Type { get; set; }
     public string Location { get; set; }
     public decimal HourlyRate { get; set; }
     public decimal DayRate { get; set; }

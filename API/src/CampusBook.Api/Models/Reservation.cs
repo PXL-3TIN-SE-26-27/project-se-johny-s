@@ -12,7 +12,7 @@ public class Reservation
     public DateTime End { get; set; }
 
     // status
-    public string Status { get; set; } = "Pending";
+    public ReservationStatus Status { get; set; } = ReservationStatus.Pending;
 
     public bool Insurance { get; set; }
     public bool Delivery { get; set; }

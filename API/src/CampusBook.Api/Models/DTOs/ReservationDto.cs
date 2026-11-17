@@ -4,10 +4,10 @@ public class ReservationDto
 {
     public int Id { get; set; }
     public string ResourceName { get; set; }
-    public string ResourceType { get; set; }
+    public ResourceTypes ResourceType { get; set; }
     public DateTime Start { get; set; }
     public DateTime End { get; set; }
-    public string Status { get; set; }
+    public ReservationStatus Status { get; set; }
     public decimal Price { get; set; }
     public decimal Deposit { get; set; }
     public bool Paid { get; set; }

@@ -5,161 +5,218 @@ namespace CampusBook.Api.Services;
 
 public class PriceCalculator
 {
-    public decimal Calculate(Resource resource, User user, DateTime start, DateTime end,
-        bool insurance, bool delivery, bool technician, bool cleaning, bool extendedReturn)
+
+    public decimal Calculate(
+        Resource resource,
+        User user,
+        DateTime start,
+        DateTime end,
+        bool insurance,
+        bool delivery,
+        bool technician,
+        bool cleaning,
+        bool extendedReturn)
     {
-        decimal price = 0;
-        var hours = (decimal)Math.Ceiling((end - start).TotalHours);
-        var days = (decimal)Math.Ceiling((end - start).TotalDays);
+        decimal hours = (decimal)Math.Ceiling((end - start).TotalHours);
+        decimal days = (decimal)Math.Ceiling((end - start).TotalDays);
 
         if (hours <= 0)
         {
             throw new ArgumentException("Invalid period");
         }
 
-        if (user.Role == "staff")
+        if (user.UserRole == UserRole.Staff)
         {
             return 0;
         }
-        else if (user.Role == "student")
-        {
-            switch (resource.Type)
-            {
-                case "laptop":
-                    price = hours * resource.HourlyRate;
-                    if (hours > 24)
-                    {
-                        price = Math.Min(price, days * resource.DayRate);
-                    }
-                    break;
-                case "camera":
-                    price = hours * resource.HourlyRate;
-                    if (hours > 8)
-                    {
-                        price = Math.Min(price, days * resource.DayRate);
-                    }
-                    break;
-                case "printer":
-                    price = hours * resource.HourlyRate + 2.50m;
-                    break;
-                case "room":
-                    price = hours * resource.HourlyRate;
-                    break;
-                default:
-                    throw new InvalidOperationException("Unknown resource type " + resource.Type);
-            }
-        }
-        else if (user.Role == "association")
-        {
-            switch (resource.Type)
-            {
-                case "room":
-                    price = days * resource.DayRate;
-                    if (start.DayOfWeek != DayOfWeek.Saturday && start.DayOfWeek != DayOfWeek.Sunday)
-                    {
-                        price = price * 0.8m;
-                    }
-                    break;
-                case "laptop":
-                case "camera":
-                    price = days * resource.DayRate;
-                    break;
-                case "printer":
-                    price = hours * resource.HourlyRate + 2.50m;
-                    break;
-                default:
-                    throw new InvalidOperationException("Unknown resource type " + resource.Type);
-            }
-        }
-        else
-        {
-            throw new InvalidOperationException("Unknown role " + user.Role);
-        }
 
-        if (end.DayOfWeek == DayOfWeek.Saturday || end.DayOfWeek == DayOfWeek.Sunday)
+        decimal price = user.UserRole switch
         {
-            price = price + price * AppConfig.Instance.WeekendSurcharge;
-        }
+            UserRole.Student => CalculateStudentPrice(resource, hours, days),
+            _ => user.UserRole == UserRole.Association                ? CalculateAssociationPrice(resource, start, hours, days)
+                : throw new InvalidOperationException($"Unknown role {user.UserRole}")
+        };
 
-        if (insurance)
-        {
-            if (resource.Type == "camera" || resource.Type == "laptop")
-            {
-                price = price + price * 0.10m;
-            }
-            else
-            {
-                price = price + 5m;
-            }
-        }
-
-        if (delivery && !insurance)
-        {
-            if (resource.Type == "room")
-            {
-                throw new InvalidOperationException("Rooms cannot be delivered");
-            }
-            price = price + 15m;
-        }
-        else if (delivery && insurance)
-        {
-            if (resource.Type == "room")
-            {
-                throw new InvalidOperationException("Rooms cannot be delivered");
-            }
-            price = price + 10m;
-        }
-
-        if (technician && cleaning)
-        {
-            price = price + 30m * hours;
-        }
-        else if (technician)
-        {
-            price = price + 30m * hours;
-        }
-        else if (cleaning)
-        {
-            if (resource.Type == "room")
-            {
-                price = price + 25m;
-            }
-            else
-            {
-                price = price + 8m;
-            }
-        }
-
-        if (extendedReturn)
-        {
-            if (delivery)
-            {
-                price = price + 5m;
-            }
-            else if (technician)
-            {
-                price = price + 0m;
-            }
-            else
-            {
-                price = price + 7.5m;
-            }
-        }
-
-        if (AppConfig.Instance.CurrentCampaignDiscount > 0 && DateTime.Now < AppConfig.Instance.CampaignEndsAt)
-        {
-            price = price - price * AppConfig.Instance.CurrentCampaignDiscount;
-        }
+        price = ApplyWeekendSurcharge(price, end);
+        price = ApplyInsurance(price, resource, insurance);
+        price = ApplyDelivery(price, resource, delivery, insurance);
+        price = ApplyAdditionalServices(price, resource, hours, technician, cleaning);
+        price = ApplyExtendedReturn(price, delivery, technician, extendedReturn);
+        price = ApplyCampaignDiscount(price);
 
         return Math.Round(price, 2);
     }
 
-    public decimal CancellationFee(Reservation r)
+    private decimal CalculateStudentPrice(Resource resource, decimal hours, decimal days)
     {
-        if (r.Status == "Confirmed" && r.Start - DateTime.Now < TimeSpan.FromHours(24))
+        return resource.Type switch
         {
-            return Math.Round(r.Price * 0.5m, 2);
+            ResourceTypes.Laptop => CalculateHourlyOrDailyPrice(resource, hours, days, 24),
+            ResourceTypes.Camera => CalculateHourlyOrDailyPrice(resource, hours, days, 8),
+            ResourceTypes.Printer => hours * resource.HourlyRate + 2.50m,
+            ResourceTypes.Room => hours * resource.HourlyRate,
+            _ => throw new InvalidOperationException($"Unknown resource type {resource.Type}")
+        };
+    }
+
+    private decimal CalculateAssociationPrice(
+        Resource resource,
+        DateTime start,
+        decimal hours,
+        decimal days)
+    {
+        return resource.Type switch
+        {
+            ResourceTypes.Room => CalculateAssociationRoomPrice(resource, start, days),
+            ResourceTypes.Laptop or ResourceTypes.Camera => days * resource.DayRate,
+            ResourceTypes.Printer => hours * resource.HourlyRate + 2.50m,
+            _ => throw new InvalidOperationException($"Unknown resource type {resource.Type}")
+        };
+    }
+
+    private decimal CalculateHourlyOrDailyPrice(
+        Resource resource,
+        decimal hours,
+        decimal days,
+        decimal dailyRateThreshold)
+    {
+        decimal price = hours * resource.HourlyRate;
+
+        if (hours > dailyRateThreshold)
+        {
+            price = Math.Min(price, days * resource.DayRate);
         }
+
+        return price;
+    }
+
+    private decimal CalculateAssociationRoomPrice(
+        Resource resource,
+        DateTime start,
+        decimal days)
+    {
+        decimal price = days * resource.DayRate;
+
+        bool isWeekday = start.DayOfWeek is not DayOfWeek.Saturday
+            and not DayOfWeek.Sunday;
+
+        return isWeekday ? price * 0.8m : price;
+    }
+
+    private decimal ApplyWeekendSurcharge(decimal price, DateTime end)
+    {
+        bool isWeekend = end.DayOfWeek is DayOfWeek.Saturday
+            or DayOfWeek.Sunday;
+
+        if (isWeekend)
+        {
+            price += price * AppConfig.Instance.WeekendSurcharge;
+        }
+
+        return price;
+    }
+
+    private decimal ApplyInsurance(decimal price, Resource resource, bool insurance)
+    {
+        if (!insurance)
+        {
+            return price;
+        }
+
+        bool isInsurableResource = resource.Type is ResourceTypes.Camera
+            or ResourceTypes.Laptop;
+
+        return isInsurableResource
+            ? price * 1.10m
+            : price + 5m;
+    }
+
+    private decimal ApplyDelivery(
+        decimal price,
+        Resource resource,
+        bool delivery,
+        bool insurance)
+    {
+        if (!delivery)
+        {
+            return price;
+        }
+
+        if (resource.Type == ResourceTypes.Room)
+        {
+            throw new InvalidOperationException("Rooms cannot be delivered");
+        }
+
+        return price + (insurance ? 10m : 15m);
+    }
+
+    private decimal ApplyAdditionalServices(
+        decimal price,
+        Resource resource,
+        decimal hours,
+        bool technician,
+        bool cleaning)
+    {
+        if (technician)
+        {
+            price += 30m * hours;
+        }
+
+        if (cleaning)
+        {
+            price += resource.Type == ResourceTypes.Room ? 25m : 8m;
+        }
+
+        return price;
+    }
+
+    private decimal ApplyExtendedReturn(
+        decimal price,
+        bool delivery,
+        bool technician,
+        bool extendedReturn)
+    {
+        if (!extendedReturn)
+        {
+            return price;
+        }
+
+        if (delivery)
+        {
+            return price + 5m;
+        }
+
+        if (technician)
+        {
+            return price;
+        }
+
+        return price + 7.5m;
+    }
+
+    private decimal ApplyCampaignDiscount(decimal price)
+    {
+        var config = AppConfig.Instance;
+
+        if (config.CurrentCampaignDiscount > 0 &&
+            DateTime.Now < config.CampaignEndsAt)
+        {
+            price -= price * config.CurrentCampaignDiscount;
+        }
+
+        return price;
+    }
+
+
+    public decimal CancellationFee(Reservation reservation)
+    {
+        if (reservation.Status == ReservationStatus.Confirmed &&
+            reservation.Start - DateTime.Now < TimeSpan.FromHours(24))
+        {
+            return Math.Round(reservation.Price * 0.5m, 2);
+        }
+
         return 0;
     }
+
 }
