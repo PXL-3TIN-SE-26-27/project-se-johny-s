@@ -1,6 +1,4 @@
 using System.Text;
-using CampusBook.Api.Data;
-using CampusBook.Api.Infrastructure;
 using CampusBook.Api.Models;
 using CampusBook.Api.Models.DTOs;
 using CampusBook.Api.Services;
@@ -12,17 +10,26 @@ namespace CampusBook.Api.Controllers;
 [Route("api/reservations")]
 public class ReservationsController(ReservationService service, ExportService export, CampusDbContext db) : ControllerBase
 {
+    private readonly ReservationService _service;
+    private readonly ExportService _exportService;
+
+    public ReservationsController(ReservationService service, ExportService exportService)
+    {
+        _service = service;
+        _exportService = exportService;
+    }
+
     [HttpGet]
     public IActionResult GetForUser([FromQuery] int userId)
     {
         if (userId <= 0) return BadRequest("userId is required");
-        return Ok(service.GetForUser(userId));
+        return Ok(_service.GetForUser(userId));
     }
 
     [HttpGet("overdue")]
     public IActionResult Overdue()
     {
-        return Ok(service.GetOverdue());
+        return Ok(_service.GetOverdue());
     }
 
     [HttpPost]
@@ -35,7 +42,7 @@ public class ReservationsController(ReservationService service, ExportService ex
 
         try
         {
-            var dto = service.Create(request);
+            var dto = _service.Create(request);
             return Ok(dto);
         }
         catch (ArgumentException ex)
@@ -57,26 +64,7 @@ public class ReservationsController(ReservationService service, ExportService ex
     {
         try
         {
-            var r = service.Confirm(id);
-
-            var user = db.Users.Find(r.UserId);
-            var resource = db.Resources.Find(r.ResourceId);
-
-            var mailer = new SmtpMailer("smtp.campus.local");
-            mailer.Send(user.Email, "CampusBook: reservation confirmed",
-                "Hi " + user.Name + ",\n\nYour reservation #" + r.Id + " for " + resource.Name + " on " +
-                r.Start.ToString("dd/MM/yyyy HH:mm") + " is confirmed.\nLocation: " + resource.Location + "\n\nCampusBook");
-
-            if (resource.Type == "room" && user.Role == "association")
-            {
-                mailer.Send(AppConfig.Instance.AdminEmail, "Room booked by association",
-                    user.Name + " booked " + resource.Name + " on " + r.Start.ToString("dd/MM/yyyy") +
-                    ". Please check opening hours and security.");
-            }
-
-            new FileAuditLogger().Log("CONFIRM", r.Id, user.Id);
-            StatsService.RegisterConfirmation(resource.Type, r.Price);
-
+            var r = _service.Confirm(id);
             return Ok(new { r.Id, r.Status });
         }
         catch (KeyNotFoundException ex)
@@ -94,7 +82,7 @@ public class ReservationsController(ReservationService service, ExportService ex
     {
         try
         {
-            var r = service.CheckOut(id);
+            var r = _service.CheckOut(id);
             return Ok(new { r.Id, r.Status });
         }
         catch (KeyNotFoundException ex)
@@ -112,7 +100,7 @@ public class ReservationsController(ReservationService service, ExportService ex
     {
         try
         {
-            var r = service.Return(id);
+            var r = _service.Return(id);
             return Ok(new { r.Id, r.Status, r.Price });
         }
         catch (KeyNotFoundException ex)
@@ -130,7 +118,7 @@ public class ReservationsController(ReservationService service, ExportService ex
     {
         try
         {
-            var r = service.Cancel(id);
+            var r = _service.Cancel(id);
             return Ok(new { r.Id, r.Status });
         }
         catch (KeyNotFoundException ex)
@@ -148,7 +136,7 @@ public class ReservationsController(ReservationService service, ExportService ex
     {
         try
         {
-            var r = service.Pay(id);
+            var r = _service.Pay(id);
             return Ok(new { r.Id, r.Status, r.Paid, r.PaymentRef });
         }
         catch (ArgumentException ex)
@@ -168,7 +156,7 @@ public class ReservationsController(ReservationService service, ExportService ex
     [HttpPost("reminders")]
     public IActionResult Reminders()
     {
-        var count = service.SendReminders();
+        var count = _service.SendReminders();
         return Ok(new { sent = count });
     }
 
@@ -176,7 +164,12 @@ public class ReservationsController(ReservationService service, ExportService ex
     public IActionResult Export([FromQuery] int userId)
     {
         if (userId <= 0) return BadRequest("userId is required");
-        var csv = export.ToCsv(userId);
-        return File(Encoding.UTF8.GetBytes(csv), "text/csv", "reservations.csv");
+
+        var csv = _exportService.ToCsv(userId);
+
+        return File(
+            Encoding.UTF8.GetBytes(csv),
+            "text/csv",
+            "reservations.csv");
     }
 }

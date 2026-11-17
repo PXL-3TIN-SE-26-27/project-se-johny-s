@@ -16,6 +16,13 @@ builder.Services.AddScoped<ExportService>();
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
+builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
+builder.Services.AddScoped<ReservationService>();
+builder.Services.AddScoped<ExportService>();
+builder.Services.AddScoped<ResourceService>();
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<StatsService>();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
