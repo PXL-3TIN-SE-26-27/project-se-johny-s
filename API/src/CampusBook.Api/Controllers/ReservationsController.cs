@@ -1,5 +1,6 @@
 using System.Text;
 using CampusBook.Api.Models;
+using CampusBook.Api.Models.DTOs;
 using CampusBook.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +8,7 @@ namespace CampusBook.Api.Controllers;
 
 [ApiController]
 [Route("api/reservations")]
-public class ReservationsController : ControllerBase
+public class ReservationsController(ReservationService service, ExportService export, CampusDbContext db) : ControllerBase
 {
     private readonly ReservationService _service;
     private readonly ExportService _exportService;

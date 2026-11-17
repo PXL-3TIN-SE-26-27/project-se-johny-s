@@ -6,7 +6,7 @@ namespace CampusBook.Api.Controllers;
 
 [ApiController]
 [Route("api/resources")]
-public class ResourcesController : ControllerBase
+public class ResourcesController(ReservationService service, CampusDbContext db) : ControllerBase
 {
     private readonly ReservationService _reservationService;
     private readonly ResourceService _resourceService;
