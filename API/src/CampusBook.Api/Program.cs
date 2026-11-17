@@ -1,10 +1,24 @@
+using CampusBook.Api.Data;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+builder.Services.AddDbContext<CampusDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("Campus") ?? "Data Source=campusbook.db"));
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<CampusDbContext>();
+    db.Database.EnsureCreated();
+}
+
 app.UseCors();
-app.MapGet("/api/hello", () => new { message = "Hallo van de CampusBook API" });
+app.MapControllers();
+app.MapGet("/", () => "CampusBook API");
 
 app.Run();

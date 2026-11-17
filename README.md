@@ -1,22 +1,27 @@
 # CampusBook
 
-CampusBook wordt de reservatietoepassing van de campus. Deze week krijg je enkel
-het skelet: een API met één endpoint en een frontend die dat endpoint aanspreekt.
-Volgende week komt de echte code erbij.
+CampusBook is de reservatietoepassing van de campus. Studenten, personeel en
+studentenverenigingen reserveren er lokalen, laptops, camera's en 3D-printers.
 
-Je opdracht deze week: krijg beide delen online op Azure, via GitHub Actions.
+De toepassing draait al een tijdje en werkt. Jullie team neemt het onderhoud over.
 
 ## Inhoud
 
 | Map | Wat |
 | --- | --- |
-| `API/src/CampusBook.Api` | ASP.NET Core Web API met één endpoint: `GET /api/hello` |
-| `API/tests/CampusBook.Tests` | xUnit-tests, voorlopig één (groen) |
-| `Frontend` | Vue-applicatie (Vite) die het antwoord van de API toont |
+| `API/src/CampusBook.Api` | ASP.NET Core Web API met EF Core en SQLite |
+| `API/tests/CampusBook.Tests` | xUnit-tests |
+| `Frontend` | Vue-applicatie (Vite), zie `Frontend/README.md` |
+| `docs` | Overdrachtsdocument van het vorige team, ADR-template en AI-log |
+
+Begin met `docs/overdracht.md`: wat CampusBook doet, hoe prijzen berekend
+worden en wat je in de frontend kan.
 
 ## Lokaal draaien
 
 ### API
+
+Je hebt de .NET SDK nodig (zie de `TargetFramework` in de projectbestanden).
 
 ```
 cd API
@@ -25,11 +30,16 @@ dotnet test
 dotnet run --project src/CampusBook.Api
 ```
 
-De API luistert op `http://localhost:5080`. Test met
-`http://localhost:5080/api/hello`.
+De API luistert op `http://localhost:5080`. De database (`campusbook.db`) wordt
+bij de eerste start aangemaakt en gevuld met seed data. Wil je opnieuw
+beginnen met de seed data, stop dan de API en verwijder het bestand.
+
+Mails worden niet echt verstuurd maar als `.eml`-bestand weggeschreven in
+`mail-out`. Elke actie op een reservatie komt ook in `audit.log`.
 
 ### Frontend
 
+Je hebt Node.js nodig (zie de vereisten van Vite voor de minimale versie).
 
 ```
 cd Frontend
@@ -38,25 +48,13 @@ npm run dev
 ```
 
 De frontend draait op `http://localhost:5173` en praat met de API op het adres
-uit `.env.development`. Start de API dus eerst.
+uit `.env.development`. Start de API dus eerst. Er is geen login: je kiest
+rechtsboven wie je bent.
 
-`npm run build` zet het resultaat in `Frontend/dist`. Dat is een map met
-statische bestanden.
+## Afspraken
 
-## Configuratie
-
-| Variabele | Betekenis |
-| --- | --- |
-| `VITE_API_BASE` | Adres van de API, zonder slash op het einde |
-
-Zie `Frontend/.env.example`. Vite leest deze waarde in **tijdens het bouwen**,
-niet wanneer de site draait.
-
-## Klaar als
-
-- [ ] iedereen in je team beide delen lokaal kan draaien
-- [ ] de pipeline de API bouwt en de test draait
-- [ ] de API online staat en `/api/hello` een antwoord geeft
-- [ ] de frontend online staat en het antwoord van de online API toont, niet dat van `localhost`
-- [ ] een push naar `main` beide delen opnieuw uitrolt, zonder manuele stappen
-- [ ] er geen wachtwoorden, sleutels of connectiestrings in de repo staan
+- `API/src/CampusBook.Api/Infrastructure/LegacyPayGateway.cs` is code van de
+  betaalprovider. Die pas je niet aan.
+- De code van de frontend hoef je niet aan te passen. Configuratie voor build en deploy mag je wel aanpassen.
+- Gedrag van de API verander je enkel bewust, in een aparte pull request met
+  een test die het nieuwe gedrag vastlegt.

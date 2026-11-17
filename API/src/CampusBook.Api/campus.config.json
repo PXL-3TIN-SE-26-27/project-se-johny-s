@@ -1,0 +1,11 @@
+{
+  "SmtpFrom": "noreply@campusbook.local",
+  "MailPickupDirectory": "mail-out",
+  "AuditLogPath": "audit.log",
+  "MerchantId": "CAMPUS-0042",
+  "CurrentCampaignDiscount": 0,
+  "CampaignEndsAt": "2000-01-01T00:00:00",
+  "WeekendSurcharge": 0.25,
+  "MaxHours": 72,
+  "AdminEmail": "facilities@campusbook.local"
+}
