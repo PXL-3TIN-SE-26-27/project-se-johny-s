@@ -155,10 +155,10 @@ public class PriceCalculator
             }
         }
 
-        if (AppConfig.Instance.CurrentCampaignDiscount > 0 &&
-            DateTime.Now < AppConfig.Instance.CampaignEndsAt)
+        if (end.DayOfWeek == DayOfWeek.Saturday ||
+            end.DayOfWeek == DayOfWeek.Sunday)
         {
-            price = price - price * AppConfig.Instance.CurrentCampaignDiscount;
+            price = price + price * AppConfig.Instance.WeekendSurcharge;
         }
 
         return Math.Round(price, 2);
