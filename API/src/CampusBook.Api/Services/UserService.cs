@@ -1,22 +1,14 @@
 ﻿using CampusBook.Api.Data;
 using CampusBook.Api.Models;
 
-namespace CampusBook.Api.Services
+namespace CampusBook.Api.Services;
+
+public class UserService(CampusDbContext db)
 {
-    public class UserService
+    public List<User> GetUsers()
     {
-        private readonly CampusDbContext _db;
-
-        public UserService(CampusDbContext db)
-        {
-            _db = db;
-        }
-
-        public List<User> GetUsers()
-        {
-            return _db.Users
-                .OrderBy(u => u.Name)
-                .ToList();
-        }
+        return db.Users
+            .OrderBy(u => u.Name)
+            .ToList();
     }
 }
