@@ -16,13 +16,13 @@ public class ReservationService(IReservationRepository repo, PriceCalculator cal
 
         var resources = repo.GetAllResources();
         var reservations = repo.GetByDateRange(dayStart, dayEnd)
-            .Where(r => r.Status != "Cancelled" && r.Status != "Returned")
+            .Where(r => r.Status != ReservationStatus.Cancelled && r.Status != ReservationStatus.Returned)
             .ToList();
 
         return resources
             .Select(resource => ReservationMapper.ToAvailabilityDto(
                 resource,
-                reservations.Where(reservation => reservation.ResourceId == resource.Id),
+                reservations.Where(r => r.ResourceId == resource.Id),
                 dayStart,
                 dayEnd))
             .ToList();
@@ -30,21 +30,31 @@ public class ReservationService(IReservationRepository repo, PriceCalculator cal
 
     public ReservationDto Create(CreateReservationRequest req)
     {
-        if (req == null) throw new ArgumentException("Request is required");
-        if (req.End <= req.Start) throw new ArgumentException("End must be after start");
-        if (req.Start < DateTime.Now.AddMinutes(-5)) throw new ArgumentException("Start is in the past");
+        if (req == null)
+            throw new ArgumentException("Request is required");
+
+        if (req.End <= req.Start)
+            throw new ArgumentException("End must be after start");
+
+        if (req.Start < DateTime.Now.AddMinutes(-5))
+            throw new ArgumentException("Start is in the past");
+
         if ((req.End - req.Start).TotalHours > AppConfig.Instance.MaxHours)
-            throw new ArgumentException("Reservation too long, max " + AppConfig.Instance.MaxHours + " hours");
+            throw new ArgumentException(
+                "Reservation too long, max " + AppConfig.Instance.MaxHours + " hours");
 
-        var user = repo.GetUser(req.UserId);
-        if (user == null) throw new KeyNotFoundException("User " + req.UserId + " not found");
+        var user = repo.GetUser(req.UserId)
+            ?? throw new KeyNotFoundException("User " + req.UserId + " not found");
 
-        var resource = repo.GetResource(req.ResourceId);
-        if (resource == null) throw new KeyNotFoundException("Resource " + req.ResourceId + " not found");
+        var resource = repo.GetResource(req.ResourceId)
+            ?? throw new KeyNotFoundException("Resource " + req.ResourceId + " not found");
 
-        if (user.Role == "student" && resource.Type == "room" && (req.End - req.Start).TotalHours > 4)
+        if (user.UserRole == UserRole.Student &&
+            resource.Type == ResourceTypes.Room &&
+            (req.End - req.Start).TotalHours > 4)
         {
-            throw new ArgumentException("Students can book a room for at most 4 hours");
+            throw new ArgumentException(
+                "Students can book a room for at most 4 hours");
         }
 
         if (req.Delivery && !resource.CanBeDelivered())
@@ -54,252 +64,366 @@ public class ReservationService(IReservationRepository repo, PriceCalculator cal
 
         if (repo.HasOverlap(resource.Id, req.Start, req.End))
         {
-            throw new InvalidOperationException("Resource is already booked in this period");
+            throw new InvalidOperationException(
+                "Resource is already booked in this period");
         }
 
-        if (user.Role == "student")
+        if (user.UserRole == UserRole.Student)
         {
-            var open = repo.GetByUser(user.Id)
-                .Count(x => x.Status == "Pending" || x.Status == "Confirmed" || x.Status == "CheckedOut");
-            if (open >= 3)
+            var openReservations = repo.GetByUser(user.Id)
+                .Count(r =>
+                    r.Status == ReservationStatus.Pending ||
+                    r.Status == ReservationStatus.Confirmed ||
+                    r.Status == ReservationStatus.CheckedOut);
+
+            if (openReservations >= 3)
             {
-                throw new InvalidOperationException("Students can have at most 3 open reservations");
+                throw new InvalidOperationException(
+                    "Students can have at most 3 open reservations");
             }
         }
 
-        var r = ReservationMapper.ToEntity(req);
-        r.UserId = user.Id;
-        r.Status = "Pending";
-        r.CreatedAt = DateTime.Now;
+        var reservation = ReservationMapper.ToEntity(req);
 
-        resource.Reserve(r);
+        reservation.UserId = user.Id;
+        reservation.Status = ReservationStatus.Pending;
+        reservation.CreatedAt = DateTime.Now;
 
-        r.Price = calc.Calculate(resource, user, r.Start, r.End, r.Insurance, r.Delivery, r.Technician, r.Cleaning, r.ExtendedReturn);
+        resource.Reserve(reservation);
 
-        r.Deposit = 0;
-        if (user.Role == "student")
-        {
-            if (resource.Type == "camera")
-            {
-                r.Deposit = 150m;
-            }
-            else if (resource.Type == "laptop" && r.Delivery)
-            {
-                r.Deposit = 50m;
-            }
-        }
+        reservation.Price = calc.Calculate(
+            resource,
+            user,
+            reservation.Start,
+            reservation.End,
+            reservation.Insurance,
+            reservation.Delivery,
+            reservation.Technician,
+            reservation.Cleaning,
+            reservation.ExtendedReturn);
 
-        repo.Add(r);
+        reservation.Deposit = CalculateDeposit(user, resource, reservation);
+
+        repo.Add(reservation);
         repo.SaveChanges();
 
         var mailer = new SmtpMailer("smtp.campus.local");
-        mailer.Send(user.Email, "CampusBook: reservation received",
-            "Hi " + user.Name + ",\n\nWe received your reservation #" + r.Id + " for " + resource.Name +
-            " on " + r.Start.ToString("dd/MM/yyyy HH:mm") + ".\nPrice: EUR " + r.Price +
-            (r.Deposit > 0 ? "\nDeposit: EUR " + r.Deposit : "") + "\n\nCampusBook");
 
-        new FileAuditLogger().Log("CREATE", r.Id, user.Id, resource.Name);
+        mailer.Send(
+            user.Email,
+            "CampusBook: reservation received",
+            "Hi " + user.Name + ",\n\nWe received your reservation #" +
+            reservation.Id + " for " + resource.Name +
+            " on " + reservation.Start.ToString("dd/MM/yyyy HH:mm") +
+            ".\nPrice: EUR " + reservation.Price +
+            (reservation.Deposit > 0
+                ? "\nDeposit: EUR " + reservation.Deposit
+                : "") +
+            "\n\nCampusBook");
 
-        return ToDto(r, resource);
+        new FileAuditLogger().Log(
+            "CREATE", reservation.Id, user.Id, resource.Name);
+
+        return ToDto(reservation, resource);
+    }
+
+    private decimal CalculateDeposit(
+        User user,
+        Resource resource,
+        Reservation reservation)
+    {
+        if (user.UserRole != UserRole.Student)
+            return 0m;
+
+        return resource.Type switch
+        {
+            ResourceTypes.Camera => 150m,
+            ResourceTypes.Laptop when reservation.Delivery => 50m,
+            _ => 0m
+        };
     }
 
     public Reservation Confirm(int id)
     {
-        var r = repo.GetById(id);
-        if (r == null) throw new KeyNotFoundException("Reservation " + id + " not found");
+        var reservation = repo.GetById(id)
+            ?? throw new KeyNotFoundException("Reservation " + id + " not found");
 
-        if (r.Status != "Pending")
+        if (reservation.Status != ReservationStatus.Pending)
         {
-            throw new InvalidOperationException("Only pending reservations can be confirmed");
+            throw new InvalidOperationException(
+                "Only pending reservations can be confirmed");
         }
 
-        var user = repo.GetUser(r.UserId);
-        if (user.Role == "student" && !r.Paid && r.Price + r.Deposit > 0)
+        var user = repo.GetUser(reservation.UserId);
+
+        if (user.UserRole == UserRole.Student &&
+            !reservation.Paid &&
+            reservation.Price + reservation.Deposit > 0)
         {
-            throw new InvalidOperationException("Reservation must be paid before it can be confirmed");
+            throw new InvalidOperationException(
+                "Reservation must be paid before it can be confirmed");
         }
 
-        r.Status = "Confirmed";
-        repo.Update(r);
+        reservation.Status = ReservationStatus.Confirmed;
+
+        repo.Update(reservation);
         repo.SaveChanges();
-        return r;
+
+        return reservation;
     }
 
     public Reservation CheckOut(int id)
     {
-        var rsv = repo.GetById(id);
-        if (rsv == null) throw new KeyNotFoundException("Reservation " + id + " not found");
+        var reservation = repo.GetById(id)
+            ?? throw new KeyNotFoundException("Reservation " + id + " not found");
 
-        if (rsv.Status == "Confirmed")
+        if (reservation.Status == ReservationStatus.Pending)
         {
-            if (DateTime.Now < rsv.Start.AddMinutes(-30))
-            {
-                throw new InvalidOperationException("Too early, check out is possible 30 minutes before start");
-            }
-            if (DateTime.Now > rsv.End)
-            {
-                throw new InvalidOperationException("Reservation period is over");
-            }
-            if (rsv.Deposit > 0 && !rsv.Paid)
-            {
-                throw new InvalidOperationException("Deposit not paid");
-            }
+            throw new InvalidOperationException(
+                "Reservation is not confirmed yet");
+        }
 
-            rsv.Status = "CheckedOut";
-            rsv.CheckedOutAt = DateTime.Now;
-            repo.Update(rsv);
-            repo.SaveChanges();
+        if (reservation.Status != ReservationStatus.Confirmed)
+        {
+            throw new InvalidOperationException(
+                "Cannot check out a reservation with status " + reservation.Status);
+        }
 
-            var u = repo.GetUser(rsv.UserId);
-            var mailer = new SmtpMailer("smtp.campus.local");
-            mailer.Send(u.Email, "CampusBook: " + rsv.Resource.Name + " picked up",
-                "Please return it before " + (rsv.ExtendedReturn ? rsv.End.AddHours(12) : rsv.End).ToString("dd/MM/yyyy HH:mm") + ".");
-            new FileAuditLogger().Log("CHECKOUT", rsv.Id, u.Id);
-        }
-        else if (rsv.Status == "Pending")
+        if (DateTime.Now < reservation.Start.AddMinutes(-30))
         {
-            throw new InvalidOperationException("Reservation is not confirmed yet");
+            throw new InvalidOperationException(
+                "Too early, check out is possible 30 minutes before start");
         }
-        else
+
+        if (DateTime.Now > reservation.End)
         {
-            throw new InvalidOperationException("Cannot check out a reservation with status " + rsv.Status);
+            throw new InvalidOperationException("Reservation period is over");
         }
-        return rsv;
+
+        if (reservation.Deposit > 0 && !reservation.Paid)
+        {
+            throw new InvalidOperationException("Deposit not paid");
+        }
+
+        reservation.Status = ReservationStatus.CheckedOut;
+        reservation.CheckedOutAt = DateTime.Now;
+
+        repo.Update(reservation);
+        repo.SaveChanges();
+
+        var user = repo.GetUser(reservation.UserId);
+
+        var mailer = new SmtpMailer("smtp.campus.local");
+
+        mailer.Send(
+            user.Email,
+            "CampusBook: " + reservation.Resource.Name + " picked up",
+            "Please return it before " +
+            (reservation.ExtendedReturn
+                ? reservation.End.AddHours(12)
+                : reservation.End).ToString("dd/MM/yyyy HH:mm") + ".");
+
+        new FileAuditLogger().Log("CHECKOUT", reservation.Id, user.Id);
+
+        return reservation;
     }
 
     public Reservation Return(int id)
     {
-        var r = repo.GetById(id);
-        if (r == null) throw new KeyNotFoundException("Reservation " + id + " not found");
+        var reservation = repo.GetById(id)
+            ?? throw new KeyNotFoundException("Reservation " + id + " not found");
 
-        if (r.Status != "CheckedOut")
+        if (reservation.Status != ReservationStatus.CheckedOut)
         {
-            throw new InvalidOperationException("Only checked out reservations can be returned");
+            throw new InvalidOperationException(
+                "Only checked out reservations can be returned");
         }
 
-        r.Status = "Returned";
-        r.ReturnedAt = DateTime.Now;
+        reservation.Status = ReservationStatus.Returned;
+        reservation.ReturnedAt = DateTime.Now;
 
-        var allowed = r.ExtendedReturn ? r.End.AddHours(12) : r.End.AddMinutes(15);
-        if (r.ReturnedAt > allowed)
+        var allowedReturnTime = reservation.ExtendedReturn
+            ? reservation.End.AddHours(12)
+            : reservation.End.AddMinutes(15);
+
+        if (reservation.ReturnedAt > allowedReturnTime)
         {
-            var lateHours = (decimal)Math.Ceiling((r.ReturnedAt.Value - allowed).TotalHours);
-            r.Price = r.Price + lateHours * 5m;
-            r.Notes = (r.Notes ?? "") + " [late " + lateHours + "h]";
+            var lateHours = (decimal)Math.Ceiling(
+                (reservation.ReturnedAt.Value - allowedReturnTime).TotalHours);
+
+            reservation.Price += lateHours * 5m;
+
+            reservation.Notes = (reservation.Notes ?? "") +
+                                " [late " + lateHours + "h]";
         }
 
-        if (r.Deposit > 0 && r.Paid)
+        if (reservation.Deposit > 0 && reservation.Paid)
         {
             var gateway = new LegacyPayGateway();
-            var amount = ((int)(r.Deposit * 100)).ToString(CultureInfo.InvariantCulture);
-            var code = gateway.Refund(AppConfig.Instance.MerchantId, r.PaymentRef, amount);
+
+            var amount = ((int)(reservation.Deposit * 100))
+                .ToString(CultureInfo.InvariantCulture);
+
+            var code = gateway.Refund(
+                AppConfig.Instance.MerchantId,
+                reservation.PaymentRef,
+                amount);
+
             if (code != LegacyPayGateway.OK)
             {
-                r.Notes = (r.Notes ?? "") + " [deposit refund failed: " + gateway.LastError + "]";
+                reservation.Notes = (reservation.Notes ?? "") +
+                    " [deposit refund failed: " + gateway.LastError + "]";
             }
         }
 
-        repo.Update(r);
+        repo.Update(reservation);
         repo.SaveChanges();
 
-        var user = repo.GetUser(r.UserId);
-        var mailer = new SmtpMailer("smtp.campus.local");
-        mailer.Send(user.Email, "CampusBook: thanks for returning " + r.Resource.Name,
-            "Your reservation #" + r.Id + " is closed." + (r.Deposit > 0 ? " Your deposit will be refunded." : ""));
-        new FileAuditLogger().Log("RETURN", r.Id, user.Id, r.Notes);
+        var user = repo.GetUser(reservation.UserId);
 
-        return r;
+        var mailer = new SmtpMailer("smtp.campus.local");
+
+        mailer.Send(
+            user.Email,
+            "CampusBook: thanks for returning " + reservation.Resource.Name,
+            "Your reservation #" + reservation.Id + " is closed." +
+            (reservation.Deposit > 0
+                ? " Your deposit will be refunded."
+                : ""));
+
+        new FileAuditLogger().Log(
+            "RETURN", reservation.Id, user.Id, reservation.Notes);
+
+        return reservation;
     }
 
     public Reservation Cancel(int id)
     {
-        var r = repo.GetById(id);
-        if (r == null) throw new KeyNotFoundException("Reservation " + id + " not found");
+        var reservation = repo.GetById(id)
+            ?? throw new KeyNotFoundException("Reservation " + id + " not found");
 
-        if (r.Status == "Cancelled")
+        if (reservation.Status == ReservationStatus.Cancelled)
         {
             throw new InvalidOperationException("Reservation is already cancelled");
         }
-        if (r.Status == "CheckedOut")
+
+        if (reservation.Status == ReservationStatus.CheckedOut)
         {
             throw new InvalidOperationException("Item is checked out, return it first");
         }
 
-        var fee = calc.CancellationFee(r);
+        var fee = calc.CancellationFee(reservation);
 
-        if (r.Paid && r.PaymentRef != "FREE")
+        if (reservation.Paid && reservation.PaymentRef != "FREE")
         {
-            var refund = r.Price + r.Deposit - fee;
+            var refund = reservation.Price + reservation.Deposit - fee;
+
             if (refund > 0)
             {
                 var gateway = new LegacyPayGateway();
-                var cents = ((int)(refund * 100)).ToString(CultureInfo.InvariantCulture);
-                var code = gateway.Refund(AppConfig.Instance.MerchantId, r.PaymentRef, cents);
+
+                var cents = ((int)(refund * 100))
+                    .ToString(CultureInfo.InvariantCulture);
+
+                var code = gateway.Refund(
+                    AppConfig.Instance.MerchantId,
+                    reservation.PaymentRef,
+                    cents);
+
                 if (code != LegacyPayGateway.OK)
                 {
-                    throw new InvalidOperationException("Refund failed: " + gateway.LastError);
+                    throw new InvalidOperationException(
+                        "Refund failed: " + gateway.LastError);
                 }
             }
         }
 
-        r.Status = "Cancelled";
-        r.CancelledAt = DateTime.Now;
+        reservation.Status = ReservationStatus.Cancelled;
+        reservation.CancelledAt = DateTime.Now;
+
         if (fee > 0)
         {
-            r.Notes = (r.Notes ?? "") + " [cancellation fee " + fee + "]";
+            reservation.Notes = (reservation.Notes ?? "") +
+                                " [cancellation fee " + fee + "]";
         }
-        repo.Update(r);
+
+        repo.Update(reservation);
         repo.SaveChanges();
 
-        var user = repo.GetUser(r.UserId);
-        var mailer = new SmtpMailer("smtp.campus.local");
-        mailer.Send(user.Email, "CampusBook: reservation cancelled",
-            "Your reservation #" + r.Id + " has been cancelled." + (fee > 0 ? " A fee of EUR " + fee + " was charged." : ""));
-        new FileAuditLogger().Log("CANCEL", r.Id, user.Id, fee.ToString(CultureInfo.InvariantCulture));
+        var user = repo.GetUser(reservation.UserId);
 
-        return r;
+        var mailer = new SmtpMailer("smtp.campus.local");
+
+        mailer.Send(
+            user.Email,
+            "CampusBook: reservation cancelled",
+            "Your reservation #" + reservation.Id + " has been cancelled." +
+            (fee > 0 ? " A fee of EUR " + fee + " was charged." : ""));
+
+        new FileAuditLogger().Log(
+            "CANCEL",
+            reservation.Id,
+            user.Id,
+            fee.ToString(CultureInfo.InvariantCulture));
+
+        return reservation;
     }
 
     public Reservation Pay(int reservationID)
     {
-        var r = repo.GetById(reservationID);
-        if (r == null) throw new KeyNotFoundException("Reservation " + reservationID + " not found");
+        var reservation = repo.GetById(reservationID)
+            ?? throw new KeyNotFoundException(
+                "Reservation " + reservationID + " not found");
 
-        if (r.Paid)
+        if (reservation.Paid)
         {
             throw new InvalidOperationException("Reservation is already paid");
         }
-        if (r.Status == "Cancelled" || r.Status == "Returned")
+
+        if (reservation.Status is ReservationStatus.Cancelled
+            or ReservationStatus.Returned)
         {
-            throw new InvalidOperationException("Cannot pay a reservation with status " + r.Status);
+            throw new InvalidOperationException(
+                "Cannot pay a reservation with status " + reservation.Status);
         }
 
-        var total = r.Price + r.Deposit;
+        var total = reservation.Price + reservation.Deposit;
+
         if (total == 0)
         {
-            r.Paid = true;
-            r.PaymentRef = "FREE";
-            repo.Update(r);
+            reservation.Paid = true;
+            reservation.PaymentRef = "FREE";
+
+            repo.Update(reservation);
             repo.SaveChanges();
-            return r;
+
+            return reservation;
         }
 
         var gateway = new LegacyPayGateway();
-        var cents = ((int)(total * 100)).ToString(CultureInfo.InvariantCulture);
+
+        var cents = ((int)(total * 100))
+            .ToString(CultureInfo.InvariantCulture);
+
         int code;
+
         try
         {
-            code = gateway.Charge(AppConfig.Instance.MerchantId, cents, "R" + r.Id);
+            code = gateway.Charge(
+                AppConfig.Instance.MerchantId,
+                cents,
+                "R" + reservation.Id);
         }
         catch (TimeoutException)
         {
-            throw new InvalidOperationException("Payment provider did not answer, try again");
+            throw new InvalidOperationException(
+                "Payment provider did not answer, try again");
         }
 
         if (code == LegacyPayGateway.OK)
         {
-            r.Paid = true;
-            r.PaymentRef = gateway.LastTransactionId;
+            reservation.Paid = true;
+            reservation.PaymentRef = gateway.LastTransactionId;
         }
         else if (code == LegacyPayGateway.DECLINED)
         {
@@ -311,70 +435,80 @@ public class ReservationService(IReservationRepository repo, PriceCalculator cal
         }
         else
         {
-            throw new InvalidOperationException("Payment failed: " + gateway.LastError);
+            throw new InvalidOperationException(
+                "Payment failed: " + gateway.LastError);
         }
 
-        repo.Update(r);
+        repo.Update(reservation);
         repo.SaveChanges();
 
-        var user = repo.GetUser(r.UserId);
-        var mailer = new SmtpMailer("smtp.campus.local");
-        mailer.Send(user.Email, "CampusBook: payment received",
-            "We received EUR " + total + " for reservation #" + r.Id + ". Reference: " + r.PaymentRef);
-        new FileAuditLogger().Log("PAY", r.Id, user.Id, r.PaymentRef);
+        var user = repo.GetUser(reservation.UserId);
 
-        return r;
+        var mailer = new SmtpMailer("smtp.campus.local");
+
+        mailer.Send(
+            user.Email,
+            "CampusBook: payment received",
+            "We received EUR " + total + " for reservation #" +
+            reservation.Id + ". Reference: " + reservation.PaymentRef);
+
+        new FileAuditLogger().Log(
+            "PAY", reservation.Id, user.Id, reservation.PaymentRef);
+
+        return reservation;
     }
 
     public List<ReservationDto> GetForUser(int userId)
     {
-        var list = repo.GetByUser(userId);
-        var result = new List<ReservationDto>();
-        foreach (var r in list)
-        {
-            result.Add(ToDto(r, r.Resource));
-        }
-        return result;
+        return repo.GetByUser(userId)
+            .Select(r => ToDto(r, r.Resource))
+            .ToList();
     }
 
     public List<ReservationDto> GetOverdue()
     {
-        return repo.GetOverdue(DateTime.Now).Select(r => ToDto(r, r.Resource)).ToList();
+        return repo.GetOverdue(DateTime.Now)
+            .Select(r => ToDto(r, r.Resource))
+            .ToList();
     }
 
     public int SendReminders()
     {
         var tomorrow = DateTime.Today.AddDays(1);
-        var list = repo.GetByDateRange(tomorrow, tomorrow.AddDays(1))
-            .Where(r => r.Status == "Confirmed" && r.Start >= tomorrow)
+
+        var reservations = repo.GetByDateRange(tomorrow, tomorrow.AddDays(1))
+            .Where(r =>
+                r.Status == ReservationStatus.Confirmed &&
+                r.Start >= tomorrow)
             .ToList();
 
         int count = 0;
-        foreach (var r in list)
+
+        foreach (var reservation in reservations)
         {
-            var user = repo.GetUser(r.UserId);
-            var resource = repo.GetResource(r.ResourceId);
+            var user = repo.GetUser(reservation.UserId);
+            var resource = repo.GetResource(reservation.ResourceId);
+
             var mailer = new SmtpMailer("smtp.campus.local");
-            mailer.Send(user.Email, "CampusBook: reminder",
-                "Tomorrow at " + r.Start.ToString("HH:mm") + " you can pick up " + resource.Name + " at " + resource.Location + ".");
+
+            mailer.Send(
+                user.Email,
+                "CampusBook: reminder",
+                "Tomorrow at " + reservation.Start.ToString("HH:mm") +
+                " you can pick up " + resource.Name +
+                " at " + resource.Location + ".");
+
             count++;
         }
 
-        //foreach (var r in repo.GetUnpaid())
-        //{
-        //    var user = repo.GetUser(r.UserId);
-        //    if (user.Role == "association" && r.Start < DateTime.Now.AddDays(7))
-        //    {
-        //        new SmtpMailer("smtp.campus.local").Send(user.Email, "CampusBook: payment due", "...");
-        //    }
-        //}
+        new FileAuditLogger().Log(
+            "REMINDERS", 0, 0, count.ToString());
 
-        new FileAuditLogger().Log("REMINDERS", 0, 0, count.ToString());
         return count;
     }
 
-    private ReservationDto ToDto(Reservation r, Resource resource)
+    private ReservationDto ToDto(Reservation reservation, Resource resource)
     {
-        return ReservationMapper.ToDto(r, resource);
+        return ReservationMapper.ToDto(reservation, resource);
     }
 }

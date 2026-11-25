@@ -28,7 +28,7 @@ public class ReservationRepository(CampusDbContext db) : IReservationRepository
         return db.Reservations.Where(r => r.Start < to && r.End > from).ToList();
     }
 
-    public List<Reservation> GetByStatus(string status)
+    public List<Reservation> GetByStatus(ReservationStatus status)
     {
         return db.Reservations.Where(r => r.Status == status).ToList();
     }
@@ -36,37 +36,37 @@ public class ReservationRepository(CampusDbContext db) : IReservationRepository
     public List<Reservation> GetActiveForResource(int resourceId)
     {
         return db.Reservations
-            .Where(r => r.ResourceId == resourceId && (r.Status == "Pending" || r.Status == "Confirmed" || r.Status == "CheckedOut"))
+            .Where(r => r.ResourceId == resourceId && (r.Status == ReservationStatus.Pending || r.Status == ReservationStatus.Confirmed || r.Status == ReservationStatus.CheckedOut))
             .ToList();
     }
 
     public List<Reservation> GetOverdue(DateTime now)
     {
         return db.Reservations.Include(r => r.Resource).Include(r => r.User)
-            .Where(r => r.Status == "CheckedOut" && r.End < now)
+            .Where(r => r.Status == ReservationStatus.CheckedOut && r.End < now)
             .ToList();
     }
 
     public List<Reservation> GetUnpaid()
     {
-        return db.Reservations.Where(r => !r.Paid && r.Status != "Cancelled").ToList();
+        return db.Reservations.Where(r => !r.Paid && r.Status != ReservationStatus.Cancelled).ToList();
     }
 
     public bool HasOverlap(int resourceId, DateTime start, DateTime end)
     {
         return db.Reservations.Any(r => r.ResourceId == resourceId
-                                         && r.Status != "Cancelled" && r.Status != "Returned"
+                                         && r.Status != ReservationStatus.Cancelled && r.Status != ReservationStatus.Returned
                                          && r.Start < end && r.End > start);
     }
 
-    public Dictionary<string, int> CountByStatus()
+    public Dictionary<ReservationStatus, int> CountByStatus()
     {
         return db.Reservations.GroupBy(r => r.Status)
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionary(x => x.Key, x => x.Count);
     }
 
-    public Dictionary<string, int> CountByResourceType()
+    public Dictionary<ResourceTypes, int> CountByResourceType()
     {
         return db.Reservations.Include(r => r.Resource).ToList()
             .GroupBy(r => r.Resource.Type)

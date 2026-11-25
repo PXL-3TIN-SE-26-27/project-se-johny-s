@@ -39,7 +39,7 @@ public class ReservationTests
             ResourceId = 3,
             Start = new DateTime(2030, 1, 8, 10, 0, 0),
             End = new DateTime(2030, 1, 8, 12, 0, 0),
-            Status = "Pending",
+            Status = ReservationStatus.Pending,
             Price = 8m,
             CreatedAt = DateTime.Now
         };
@@ -49,7 +49,7 @@ public class ReservationTests
         var service = new ReservationService(new ReservationRepository(db), new PriceCalculator());
         service.Cancel(reservation.Id);
 
-        Assert.Equal("Cancelled", db.Reservations.Find(reservation.Id).Status);
+        Assert.Equal(ReservationStatus.Cancelled, db.Reservations.Find(reservation.Id).Status);
     }
 
     private class FakeMailer : SmtpMailer
