@@ -7,23 +7,15 @@ using CampusBook.Api.Models.Mappers;
 
 namespace CampusBook.Api.Services;
 
-public class ReservationService(CampusDbContext db, IReservationRepository repo, PriceCalculator calc)
+public class ReservationService(IReservationRepository repo, PriceCalculator calc)
 {
-    private readonly IReservationRepository _repo;
-    private readonly PriceCalculator _calc = new PriceCalculator();
-
-    public ReservationService(IReservationRepository repo)
-    {
-        _repo = repo;
-    }
-
     public List<ResourceAvailabilityDto> GetAvailability(DateTime date)
     {
         var dayStart = date.Date;
         var dayEnd = dayStart.AddDays(1);
 
-        var resources = _repo.GetAllResources();
-        var reservations = _repo.GetByDateRange(dayStart, dayEnd)
+        var resources = repo.GetAllResources();
+        var reservations = repo.GetByDateRange(dayStart, dayEnd)
             .Where(r => r.Status != "Cancelled" && r.Status != "Returned")
             .ToList();
 
