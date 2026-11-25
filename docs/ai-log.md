@@ -33,7 +33,15 @@ Kopieer voor elk nieuw item het blok "Template" hieronder.
 
 ---
 
-## Naam teamlid 1
+## Manuel Bormans
+- **Tool:** claude opus 5.5
+- **Context:** backend algemeen
+- **Vraag:** 'op dit moment word bij elke controller functie een try catch gebruikt, dit lijkt me extreem, maak een global exception handler die alle exceptions afvangt en een nette response teruggeeft'
+- **Voorstel:** alle try catch blocks zijn verwijderd en er is een global exception handler toegevoegd die alle exceptions afvangt en een nette response teruggeeft
+- **Beslissing:** overgenomen
+- **Waarom:** alles werkt naar behoren, en ziet er veel netter uit
+- **Herformulering:** /
+- **Link:** https://github.com/PXL-3TIN-SE-26-27/project-se-johny-s/pull/12
 
 ## Naam teamlid 2
 
