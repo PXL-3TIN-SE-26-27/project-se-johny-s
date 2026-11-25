@@ -6,7 +6,7 @@ namespace CampusBook.Api.Controllers;
 
 [ApiController]
 [Route("api/resources")]
-public class ResourcesController (ReservationService reservationService, ResourceService resourceService) : ControllerBase
+public class ResourcesController(ReservationService reservationService, ResourceService resourceService) : ControllerBase
 {
     [HttpGet]
     public IActionResult GetAvailability([FromQuery] DateTime? date)

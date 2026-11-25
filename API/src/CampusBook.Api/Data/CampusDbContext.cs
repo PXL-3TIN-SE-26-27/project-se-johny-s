@@ -5,7 +5,6 @@ namespace CampusBook.Api.Data;
 
 public class CampusDbContext(DbContextOptions<CampusDbContext> options) : DbContext(options)
 {
-
     public DbSet<User> Users => Set<User>();
     public DbSet<Resource> Resources => Set<Resource>();
     public DbSet<Reservation> Reservations => Set<Reservation>();

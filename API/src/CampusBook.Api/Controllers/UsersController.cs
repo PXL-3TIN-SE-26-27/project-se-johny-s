@@ -5,9 +5,8 @@ namespace CampusBook.Api.Controllers;
 
 [ApiController]
 [Route("api")]
-public class UsersController(UserService userService, StatsService statsService) : ControllerBase
+public class UsersController(StatsService statsService, UserService userService) : ControllerBase
 {
-
     [HttpGet("users")]
     public IActionResult GetUsers()
     {
