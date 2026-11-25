@@ -8,28 +8,20 @@ namespace CampusBook.Api.Controllers;
 
 [ApiController]
 [Route("api/reservations")]
-public class ReservationsController : ControllerBase
+public class ReservationsController(ReservationService service, ExportService exportService) : ControllerBase
 {
-    private readonly ReservationService _service;
-    private readonly ExportService _exportService;
-
-    public ReservationsController(ReservationService service, ExportService exportService)
-    {
-        _service = service;
-        _exportService = exportService;
-    }
 
     [HttpGet]
     public IActionResult GetForUser([FromQuery] int userId)
     {
         if (userId <= 0) return BadRequest("userId is required");
-        return Ok(_service.GetForUser(userId));
+        return Ok(service.GetForUser(userId));
     }
 
     [HttpGet("overdue")]
     public IActionResult Overdue()
     {
-        return Ok(_service.GetOverdue());
+        return Ok(service.GetOverdue());
     }
 
     [HttpPost]
@@ -42,7 +34,7 @@ public class ReservationsController : ControllerBase
 
         try
         {
-            var dto = _service.Create(request);
+            var dto = service.Create(request);
             return Ok(dto);
         }
         catch (ArgumentException ex)
@@ -64,7 +56,7 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var r = _service.Confirm(id);
+            var r = service.Confirm(id);
             return Ok(new { r.Id, r.Status });
         }
         catch (KeyNotFoundException ex)
@@ -82,7 +74,7 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var r = _service.CheckOut(id);
+            var r = service.CheckOut(id);
             return Ok(new { r.Id, r.Status });
         }
         catch (KeyNotFoundException ex)
@@ -100,7 +92,7 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var r = _service.Return(id);
+            var r = service.Return(id);
             return Ok(new { r.Id, r.Status, r.Price });
         }
         catch (KeyNotFoundException ex)
@@ -118,7 +110,7 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var r = _service.Cancel(id);
+            var r = service.Cancel(id);
             return Ok(new { r.Id, r.Status });
         }
         catch (KeyNotFoundException ex)
@@ -136,7 +128,7 @@ public class ReservationsController : ControllerBase
     {
         try
         {
-            var r = _service.Pay(id);
+            var r = service.Pay(id);
             return Ok(new { r.Id, r.Status, r.Paid, r.PaymentRef });
         }
         catch (ArgumentException ex)
@@ -156,7 +148,7 @@ public class ReservationsController : ControllerBase
     [HttpPost("reminders")]
     public IActionResult Reminders()
     {
-        var count = _service.SendReminders();
+        var count = service.SendReminders();
         return Ok(new { sent = count });
     }
 
@@ -165,7 +157,7 @@ public class ReservationsController : ControllerBase
     {
         if (userId <= 0) return BadRequest("userId is required");
 
-        var csv = _exportService.ToCsv(userId);
+        var csv = exportService.ToCsv(userId);
 
         return File(
             Encoding.UTF8.GetBytes(csv),

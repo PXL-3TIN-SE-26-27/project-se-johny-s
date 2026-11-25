@@ -3,18 +3,11 @@ using CampusBook.Api.Models;
 
 namespace CampusBook.Api.Services
 {
-    public class UserService
+    public class UserService(CampusDbContext db)
     {
-        private readonly CampusDbContext _db;
-
-        public UserService(CampusDbContext db)
-        {
-            _db = db;
-        }
-
         public List<User> GetUsers()
         {
-            return _db.Users
+            return db.Users
                 .OrderBy(u => u.Name)
                 .ToList();
         }

@@ -3,11 +3,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CampusBook.Api.Data;
 
-public class CampusDbContext : DbContext
+public class CampusDbContext(DbContextOptions<CampusDbContext> options) : DbContext(options)
 {
-    public CampusDbContext(DbContextOptions<CampusDbContext> options) : base(options)
-    {
-    }
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Resource> Resources => Set<Resource>();

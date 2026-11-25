@@ -3,18 +3,11 @@ using CampusBook.Api.Models;
 
 namespace CampusBook.Api.Services
 {
-    public class ResourceService
+    public class ResourceService(IReservationRepository repository)
     {
-        private readonly IReservationRepository _repository;
-
-        public ResourceService(IReservationRepository repository)
-        {
-            _repository = repository;
-        }
-
         public Resource GetById(int id)
         {
-            return _repository.GetResource(id);
+            return repository.GetResource(id);
         }
     }
 }

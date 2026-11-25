@@ -8,27 +8,16 @@ using CampusBook.Api.Models.Mappers;
 namespace CampusBook.Api.Services;
 
 
-public class ReservationService
+public class ReservationService(IReservationRepository repo, PriceCalculator calc)
 {
-    private readonly IReservationRepository _repo;
-    private readonly PriceCalculator _calc;
-
-    public ReservationService(
-        IReservationRepository repo,
-        PriceCalculator calc)
-    {
-        _repo = repo;
-        _calc = calc;
-    }
-
     public List<ResourceAvailabilityDto> GetAvailability(DateTime date)
     {
         var dayStart = date.Date;
         var dayEnd = dayStart.AddDays(1);
 
-        var resources = _repo.GetAllResources();
+        var resources = repo.GetAllResources();
 
-        var reservations = _repo.GetByDateRange(dayStart, dayEnd)
+        var reservations = repo.GetByDateRange(dayStart, dayEnd)
             .Where(r => r.Status != ReservationStatus.Cancelled &&
                         r.Status != ReservationStatus.Returned)
             .ToList();
@@ -57,10 +46,10 @@ public class ReservationService
             throw new ArgumentException(
                 "Reservation too long, max " + AppConfig.Instance.MaxHours + " hours");
 
-        var user = _repo.GetUser(req.UserId)
+        var user = repo.GetUser(req.UserId)
             ?? throw new KeyNotFoundException("User " + req.UserId + " not found");
 
-        var resource = _repo.GetResource(req.ResourceId)
+        var resource = repo.GetResource(req.ResourceId)
             ?? throw new KeyNotFoundException("Resource " + req.ResourceId + " not found");
 
         if (user.UserRole == UserRole.Student &&
@@ -76,7 +65,7 @@ public class ReservationService
             throw new ArgumentException("This resource cannot be delivered");
         }
 
-        if (_repo.HasOverlap(resource.Id, req.Start, req.End))
+        if (repo.HasOverlap(resource.Id, req.Start, req.End))
         {
             throw new InvalidOperationException(
                 "Resource is already booked in this period");
@@ -84,7 +73,7 @@ public class ReservationService
 
         if (user.UserRole == UserRole.Student)
         {
-            var openReservations = _repo.GetByUser(user.Id)
+            var openReservations = repo.GetByUser(user.Id)
                 .Count(r =>
                     r.Status == ReservationStatus.Pending ||
                     r.Status == ReservationStatus.Confirmed ||
@@ -105,7 +94,7 @@ public class ReservationService
 
         resource.Reserve(reservation);
 
-        reservation.Price = _calc.Calculate(
+        reservation.Price = calc.Calculate(
             resource,
             user,
             reservation.Start,
@@ -118,8 +107,8 @@ public class ReservationService
 
         reservation.Deposit = CalculateDeposit(user, resource, reservation);
 
-        _repo.Add(reservation);
-        _repo.SaveChanges();
+        repo.Add(reservation);
+        repo.SaveChanges();
 
         var mailer = new SmtpMailer("smtp.campus.local");
 
@@ -159,7 +148,7 @@ public class ReservationService
 
     public Reservation Confirm(int id)
     {
-        var reservation = _repo.GetById(id)
+        var reservation = repo.GetById(id)
             ?? throw new KeyNotFoundException("Reservation " + id + " not found");
 
         if (reservation.Status != ReservationStatus.Pending)
@@ -168,7 +157,7 @@ public class ReservationService
                 "Only pending reservations can be confirmed");
         }
 
-        var user = _repo.GetUser(reservation.UserId);
+        var user = repo.GetUser(reservation.UserId);
 
         if (user.UserRole == UserRole.Student &&
             !reservation.Paid &&
@@ -180,15 +169,15 @@ public class ReservationService
 
         reservation.Status = ReservationStatus.Confirmed;
 
-        _repo.Update(reservation);
-        _repo.SaveChanges();
+        repo.Update(reservation);
+        repo.SaveChanges();
 
         return reservation;
     }
 
     public Reservation CheckOut(int id)
     {
-        var reservation = _repo.GetById(id)
+        var reservation = repo.GetById(id)
             ?? throw new KeyNotFoundException("Reservation " + id + " not found");
 
         if (reservation.Status == ReservationStatus.Pending)
@@ -222,10 +211,10 @@ public class ReservationService
         reservation.Status = ReservationStatus.CheckedOut;
         reservation.CheckedOutAt = DateTime.Now;
 
-        _repo.Update(reservation);
-        _repo.SaveChanges();
+        repo.Update(reservation);
+        repo.SaveChanges();
 
-        var user = _repo.GetUser(reservation.UserId);
+        var user = repo.GetUser(reservation.UserId);
 
         var mailer = new SmtpMailer("smtp.campus.local");
 
@@ -244,7 +233,7 @@ public class ReservationService
 
     public Reservation Return(int id)
     {
-        var reservation = _repo.GetById(id)
+        var reservation = repo.GetById(id)
             ?? throw new KeyNotFoundException("Reservation " + id + " not found");
 
         if (reservation.Status != ReservationStatus.CheckedOut)
@@ -290,10 +279,10 @@ public class ReservationService
             }
         }
 
-        _repo.Update(reservation);
-        _repo.SaveChanges();
+        repo.Update(reservation);
+        repo.SaveChanges();
 
-        var user = _repo.GetUser(reservation.UserId);
+        var user = repo.GetUser(reservation.UserId);
 
         var mailer = new SmtpMailer("smtp.campus.local");
 
@@ -313,7 +302,7 @@ public class ReservationService
 
     public Reservation Cancel(int id)
     {
-        var reservation = _repo.GetById(id)
+        var reservation = repo.GetById(id)
             ?? throw new KeyNotFoundException("Reservation " + id + " not found");
 
         if (reservation.Status == ReservationStatus.Cancelled)
@@ -326,7 +315,7 @@ public class ReservationService
             throw new InvalidOperationException("Item is checked out, return it first");
         }
 
-        var fee = _calc.CancellationFee(reservation);
+        var fee = calc.CancellationFee(reservation);
 
         if (reservation.Paid && reservation.PaymentRef != "FREE")
         {
@@ -361,10 +350,10 @@ public class ReservationService
                                 " [cancellation fee " + fee + "]";
         }
 
-        _repo.Update(reservation);
-        _repo.SaveChanges();
+        repo.Update(reservation);
+        repo.SaveChanges();
 
-        var user = _repo.GetUser(reservation.UserId);
+        var user = repo.GetUser(reservation.UserId);
 
         var mailer = new SmtpMailer("smtp.campus.local");
 
@@ -385,7 +374,7 @@ public class ReservationService
 
     public Reservation Pay(int reservationID)
     {
-        var reservation = _repo.GetById(reservationID)
+        var reservation = repo.GetById(reservationID)
             ?? throw new KeyNotFoundException(
                 "Reservation " + reservationID + " not found");
 
@@ -408,8 +397,8 @@ public class ReservationService
             reservation.Paid = true;
             reservation.PaymentRef = "FREE";
 
-            _repo.Update(reservation);
-            _repo.SaveChanges();
+            repo.Update(reservation);
+            repo.SaveChanges();
 
             return reservation;
         }
@@ -453,10 +442,10 @@ public class ReservationService
                 "Payment failed: " + gateway.LastError);
         }
 
-        _repo.Update(reservation);
-        _repo.SaveChanges();
+        repo.Update(reservation);
+        repo.SaveChanges();
 
-        var user = _repo.GetUser(reservation.UserId);
+        var user = repo.GetUser(reservation.UserId);
 
         var mailer = new SmtpMailer("smtp.campus.local");
 
@@ -474,14 +463,14 @@ public class ReservationService
 
     public List<ReservationDto> GetForUser(int userId)
     {
-        return _repo.GetByUser(userId)
+        return repo.GetByUser(userId)
             .Select(r => ToDto(r, r.Resource))
             .ToList();
     }
 
     public List<ReservationDto> GetOverdue()
     {
-        return _repo.GetOverdue(DateTime.Now)
+        return repo.GetOverdue(DateTime.Now)
             .Select(r => ToDto(r, r.Resource))
             .ToList();
     }
@@ -490,7 +479,7 @@ public class ReservationService
     {
         var tomorrow = DateTime.Today.AddDays(1);
 
-        var reservations = _repo.GetByDateRange(tomorrow, tomorrow.AddDays(1))
+        var reservations = repo.GetByDateRange(tomorrow, tomorrow.AddDays(1))
             .Where(r =>
                 r.Status == ReservationStatus.Confirmed &&
                 r.Start >= tomorrow)
@@ -500,8 +489,8 @@ public class ReservationService
 
         foreach (var reservation in reservations)
         {
-            var user = _repo.GetUser(reservation.UserId);
-            var resource = _repo.GetResource(reservation.ResourceId);
+            var user = repo.GetUser(reservation.UserId);
+            var resource = repo.GetResource(reservation.ResourceId);
 
             var mailer = new SmtpMailer("smtp.campus.local");
 
