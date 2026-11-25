@@ -31,117 +31,43 @@ public class ReservationsController(ReservationService reservationService, Expor
         if (request.ResourceId <= 0) return BadRequest("ResourceId is required");
         if (request.End <= request.Start) return BadRequest("End must be after start");
 
-        try
-        {
-            var dto = reservationService.Create(request);
-            return Ok(dto);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(ex.Message);
-        }
+        var dto = reservationService.Create(request);
+        return Ok(dto);
     }
 
     [HttpPost("{id}/confirm")]
     public IActionResult Confirm(int id)
     {
-        try
-        {
-            var r = reservationService.Confirm(id);
-            return Ok(new { r.Id, r.Status });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(ex.Message);
-        }
+        var r = reservationService.Confirm(id);
+        return Ok(new { r.Id, r.Status });
     }
 
     [HttpPost("{id}/checkout")]
     public IActionResult CheckOut(int id)
     {
-        try
-        {
-            var r = reservationService.CheckOut(id);
-            return Ok(new { r.Id, r.Status });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(ex.Message);
-        }
+        var r = reservationService.CheckOut(id);
+        return Ok(new { r.Id, r.Status });
     }
 
     [HttpPost("{id}/return")]
     public IActionResult Return(int id)
     {
-        try
-        {
-            var r = reservationService.Return(id);
-            return Ok(new { r.Id, r.Status, r.Price });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(ex.Message);
-        }
+        var r = reservationService.Return(id);
+        return Ok(new { r.Id, r.Status, r.Price });
     }
 
     [HttpPost("{id}/cancel")]
     public IActionResult Cancel(int id)
     {
-        try
-        {
-            var r = reservationService.Cancel(id);
-            return Ok(new { r.Id, r.Status });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(ex.Message);
-        }
+        var r = reservationService.Cancel(id);
+        return Ok(new { r.Id, r.Status });
     }
 
     [HttpPost("{id}/pay")]
     public IActionResult Pay(int id)
     {
-        try
-        {
-            var r = reservationService.Pay(id);
-            return Ok(new { r.Id, r.Status, r.Paid, r.PaymentRef });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(ex.Message);
-        }
+        var r = reservationService.Pay(id);
+        return Ok(new { r.Id, r.Status, r.Paid, r.PaymentRef });
     }
 
     [HttpPost("reminders")]

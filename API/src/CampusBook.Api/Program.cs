@@ -1,10 +1,13 @@
 using CampusBook.Api.Data;
+using CampusBook.Api.Middleware;
 using CampusBook.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddDbContext<CampusDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Campus") ?? "Data Source=campusbook.db"));
 
@@ -31,6 +34,7 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
 }
 
+app.UseExceptionHandler();
 app.UseCors();
 app.MapControllers();
 app.MapGet("/", () => "CampusBook API");
